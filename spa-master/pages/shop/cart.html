@@ -269,6 +269,7 @@
 
             saveCart() {
                 localStorage.setItem('shopCart', JSON.stringify(this.cart));
+                Alpine.store('shopStore').cart = this.cart;
             },
 
             getTotal() {
@@ -279,9 +280,35 @@
                 return item.price * item.quantity;
             },
 
-            clearCart() {
-                this.cart = [];
-                this.saveCart();
+            async clearCart() {
+                try {
+                    // For each item in the cart, restore its stock in the backend
+                    for (const item of this.cart) {
+                        // Fetch current product stock
+                        const response = await fetch(`${this.apiBaseUrl}/products/${item.id}/`);
+                        if (!response.ok) continue; // skip if error
+
+                        const product = await response.json();
+
+                        // Restore the stock that was reserved for this item
+                        await fetch(`${this.apiBaseUrl}/products/${item.id}/update_stock/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                stock: product.stock + item.quantity
+                            })
+                        });
+                    }
+                    // Now clear the cart
+                    this.cart = [];
+                    this.saveCart();
+                } catch (error) {
+                    console.error('Error clearing cart:', error);
+                    this.errorMessage = 'Failed to clear cart. Please try again.';
+                    setTimeout(() => { this.errorMessage = ''; }, 3000);
+                }
             },
 
             checkout() {
